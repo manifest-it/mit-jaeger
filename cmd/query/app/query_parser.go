@@ -359,9 +359,6 @@ func mapSpanKindsToOpenTelemetry(spanKinds []string) ([]string, error) {
 }
 
 func (*queryParser) validateQuery(traceQuery *traceQueryParameters) error {
-	if len(traceQuery.traceIDs) == 0 && traceQuery.ServiceName == "" {
-		return errServiceParameterRequired
-	}
 	if traceQuery.DurationMin != 0 && traceQuery.DurationMax != 0 {
 		if traceQuery.DurationMax < traceQuery.DurationMin {
 			return errMaxDurationGreaterThanMin

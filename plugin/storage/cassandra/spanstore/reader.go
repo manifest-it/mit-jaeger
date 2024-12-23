@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -232,9 +233,39 @@ func validateQuery(p *spanstore.TraceQueryParameters) error {
 
 // FindTraces retrieves traces that match the traceQuery
 func (s *SpanReader) FindTraces(ctx context.Context, traceQuery *spanstore.TraceQueryParameters) ([]*model.Trace, error) {
-	uniqueTraceIDs, err := s.FindTraceIDs(ctx, traceQuery)
-	if err != nil {
-		return nil, err
+	var (
+		uniqueTraceIDs []model.TraceID
+		err            error
+	)
+	// check if the query has service name
+	if traceQuery.ServiceName == "" {
+		// Get all service names
+		var services []string
+		services, err := s.GetServices(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		// Get all traces for each service
+		var wg sync.WaitGroup
+		for _, service := range services {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				traceQuery.ServiceName = service
+				traceIds, err := s.FindTraceIDs(ctx, traceQuery)
+				if err != nil {
+					return
+				}
+				uniqueTraceIDs = append(uniqueTraceIDs, traceIds...)
+			}()
+		}
+		wg.Wait()
+	} else {
+		uniqueTraceIDs, err = s.FindTraceIDs(ctx, traceQuery)
+		if err != nil {
+			return nil, err
+		}
 	}
 	var retMe []*model.Trace
 	for _, traceID := range uniqueTraceIDs {
